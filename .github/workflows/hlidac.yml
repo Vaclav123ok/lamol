@@ -8,6 +8,7 @@ on:
     paths:
       - 'watchlist.txt'
       - 'hlidac.py'
+      - 'poslat-souhrn'
       - '.github/workflows/hlidac.yml'
 permissions:
   contents: write

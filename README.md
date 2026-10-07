@@ -5,6 +5,7 @@ a upozorní na nové slevy u potravin ze seznamu.
 
 - **Přidat potravinu:** připiš řádek do [`watchlist.txt`](watchlist.txt) (jde to i z mobilu, tužka vpravo nahoře). Kontrola se po uložení spustí hned.
 - **Upozornění:** nová sleva = nové issue v tomto repu, GitHub ho pošle e-mailem. Když nic nového ve slevě není, nepřijde nic.
+- **Souhrn na vyžádání:** vytvoř v repu prázdný soubor `poslat-souhrn` a přijde jeden e-mail se vším, co je právě v akci.
 - **Přehled:** [`PREHLED.md`](PREHLED.md) – co je právě v akci a jak často sleva bývá.
 - **Historie:** [`data/historie.csv`](data/historie.csv) – každá zachycená akce.
 

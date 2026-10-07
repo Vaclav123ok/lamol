@@ -12,6 +12,7 @@ MIN_SLEVA = 15          # % - mensi slevy se jen ulozi do historie, neupozornuje
 ZASADNI = 30            # % - od teto hodnoty se sleva oznaci jako zasadni
 HIST = "data/historie.csv"
 PREHLED = "PREHLED.md"
+SOUHRN = "poslat-souhrn"
 COLS = ["poprve_videno", "hledano", "produkt", "obchod", "cena_kc", "baleni", "sleva_pct",
         "bezna_cena_kc", "cena_za_jednotku", "platnost", "poznamka", "id_akce", "odkaz"]
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -153,19 +154,24 @@ def prehled(terms, aktualni, hist):
         f.write("\n".join(L) + "\n")
 
 
-def notify(nove):
+def notify(nove, souhrn=False):
     token, repo = os.environ.get("GH_TOKEN"), os.environ.get("GH_REPO")
     nove = sorted(nove, key=lambda d: (d["produkt"], d["cena_kc"]))
     top = min(nove, key=lambda d: d["cena_kc"])
     title = f"Sleva: {top['produkt']} za {kc(top['cena_kc'])} ({top['obchod']})"
     if len(nove) > 1:
         title += f" + {len(nove) - 1} další"
-    body = "\n".join(["Nové slevy na hlídané potraviny:", "", HEAD] + [radek(d) for d in nove] +
+    if souhrn:
+        title = f"Souhrn: {len(nove)} hlídaných potravin právě v akci"
+    uvod = "Vše, co je z hlídaného seznamu právě v akci:" if souhrn else "Nové slevy na hlídané potraviny:"
+    # zminka = jediny e-mail (prirazeni issue posilalo dva)
+    kdo = f"@{repo.split('/')[0]} " if repo else ""
+    body = "\n".join([kdo + uvod, "", HEAD] + [radek(d) for d in nove] +
                      ["", f"🔥 = sleva {ZASADNI} % a víc. Zdroj: kupi.cz, platnost si ověř v letáku."])
     print(title + "\n" + body)
     if not token or not repo:
         print("(bez GH_TOKEN - upozorneni se neodesila)"); return
-    payload = {"title": title, "body": body, "assignees": [repo.split("/")[0]]}
+    payload = {"title": title, "body": body}
     r = requests.post(f"https://api.github.com/repos/{repo}/issues", timeout=30, data=json.dumps(payload),
                       headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
     r.raise_for_status()
@@ -197,7 +203,11 @@ def main():
         w = csv.DictWriter(f, fieldnames=COLS); w.writeheader(); w.writerows(hist)
     prehled(terms, list(uniq.values()), hist)
     k_oznameni = [d for d in nove if d["sleva_pct"] == "" or int(d["sleva_pct"]) >= MIN_SLEVA]
-    if k_oznameni:
+    if os.path.exists(SOUHRN):  # jednorazova zadost o souhrn vseho, co je prave v akci
+        os.remove(SOUHRN)
+        if uniq:
+            notify(list(uniq.values()), souhrn=True)
+    elif k_oznameni:
         notify(k_oznameni)
     else:
         print("Zadna nova sleva k oznameni.")
