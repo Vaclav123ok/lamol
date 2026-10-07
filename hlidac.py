@@ -19,6 +19,19 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
       "Accept-Language": "cs-CZ,cs;q=0.9"}
 
 
+# Znacky koncernu Mondelez - nikdy se nehlidaji ani neoznamuji
+BLOK = {"milka", "oreo", "toblerone", "figaro", "cadbury", "philadelphia", "tuc", "bebe", "belvita",
+        "opavia", "fidorka", "minonky", "kolonada", "brumik", "daim", "halls", "mondelez"}
+
+
+def split_term(term):
+    """'kure bio -nugetky' -> (hledany dotaz, slova ktera musi byt v nazvu, slova ktera v nazvu byt nesmi)"""
+    ws = term.split()
+    plus = [w for w in ws if not w.startswith("-")]
+    minus = [norm(w[1:]) for w in ws if w.startswith("-") and len(w) > 1]
+    return " ".join(plus), [norm(w) for w in plus], minus
+
+
 def norm(s):
     s = unicodedata.normalize("NFKD", s.lower())
     return "".join(c for c in s if not unicodedata.combining(c))
@@ -37,11 +50,14 @@ def parse(html, term):
     """Vrati (pocet produktu na strance, seznam aktualnich akci odpovidajicich hledanemu vyrazu)."""
     soup = BeautifulSoup(html, "html.parser")
     groups = soup.select(".group_discounts")
-    words = norm(term).split()
+    _, words, minus = split_term(term)
     out = []
     for g in groups:
         name = txt(g.select_one(".product_name strong"))
-        if not name or not all(w in norm(name) for w in words):
+        n = norm(name)
+        if not name or not all(w in n for w in words) or any(w in n for w in minus):
+            continue
+        if BLOK & set(re.findall(r"[a-z0-9]+", n)):
             continue
         bezna = num(txt(g.select_one(".avg_price span")))
         link = g.select_one(".product_name a")
@@ -72,7 +88,7 @@ def parse(html, term):
 
 
 def fetch(term):
-    r = requests.get(f"{BASE}/hledej?f={quote_plus(term)}", headers=UA, timeout=40)
+    r = requests.get(f"{BASE}/hledej?f={quote_plus(split_term(term)[0])}", headers=UA, timeout=40)
     r.raise_for_status()
     if "kupi" not in r.text.lower():
         raise RuntimeError("neocekavana odpoved zdroje")

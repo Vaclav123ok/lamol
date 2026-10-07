@@ -1,2 +1,23 @@
 # Jedna potravina na radek. Radky zacinajici # se ignoruji.
+# Hlida se produkt, jehoz nazev obsahuje vsechna slova z radku.
+# Slovo s minusem (-nugetky) naopak v nazvu byt nesmi.
+
+# Testoviny
 la molisana
+
+# Cokolada
+tony chocolonely
+cokolada k-favourites
+
+# Ryby
+losos divoky
+losos bio
+
+# Maso a vejce
+kure bio -koreni -nugetky -obalovan -cordon -kari -nudlicky
+kure farmarske
+vejce bio
+
+# Syr a olej
+parmigiano reggiano
+olivovy olej extra panensky bio

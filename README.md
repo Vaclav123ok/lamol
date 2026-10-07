@@ -12,4 +12,7 @@ a upozorní na nové slevy u potravin ze seznamu.
 produkty, jejichž název obsahuje všechna slova z řádku. Upozornění chodí od slevy 15 % výš
 (`MIN_SLEVA` v `hlidac.py`), 30 % a víc je označeno 🔥.
 
+Slovo s minusem (`kuře bio -nugetky`) v názvu být nesmí. Značky koncernu Mondelez (Milka, Oreo,
+Toblerone, Figaro, Opavia…) se nehlídají nikdy – seznam `BLOK` v `hlidac.py`.
+
 Zdroj dat: kupi.cz.
