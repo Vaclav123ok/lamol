@@ -178,7 +178,11 @@ def mail_html(nove, souhrn):
         bezna = (f' <span style="color:#8a8f98;text-decoration:line-through;font-size:14px">{kc(d["bezna_cena_kc"])}</span>'
                  if d["bezna_cena_kc"] != "" else "")
         detail = " · ".join(x for x in (d["obchod"], d["baleni"], platnost_kratce(d["platnost"])) if x)
-        pozn = f'<div style="color:#8a8f98;font-size:13px;margin-top:2px">{e(d["poznamka"])}</div>' if d["poznamka"] else ""
+        extra = [d["poznamka"]] if d["poznamka"] else []
+        if d.get("dalsich"):
+            n = d["dalsich"]
+            extra.append(f"+ {n} další nabídka" if n == 1 else f"+ {n} další nabídky" if n < 5 else f"+ {n} dalších nabídek")
+        pozn = f'<div style="color:#8a8f98;font-size:13px;margin-top:2px">{e(" · ".join(extra))}</div>' if extra else ""
         karty.append(
             f'<tr><td style="padding:14px 0;border-bottom:1px solid #eceef1">'
             f'<a href="{e(d["odkaz"])}" style="color:#111827;text-decoration:none;font-size:16px;font-weight:600">{e(d["produkt"])}</a>'
@@ -219,7 +223,28 @@ def send_mail(nove, souhrn):
     return True
 
 
+def jednotkova(d):
+    v = num(d.get("cena_za_jednotku", "") or "")
+    return v if v is not None else float("inf")
+
+
+def vyber(akce):
+    """Jen slevy od MIN_SLEVA a z kazde hlidane polozky pouze ta nejlepsi (nejvyssi sleva, pak nejnizsi cena za jednotku)."""
+    ok = [d for d in akce if d["sleva_pct"] == "" or int(d["sleva_pct"]) >= MIN_SLEVA]
+    skup = {}
+    for d in ok:
+        skup.setdefault(norm(d["hledano"]), []).append(d)
+    out = []
+    for ds in skup.values():
+        best = min(ds, key=lambda d: (-int(d["sleva_pct"] or 0), jednotkova(d), d["cena_kc"]))
+        out.append({**best, "dalsich": len(ds) - 1})
+    return out
+
+
 def notify(nove, souhrn=False):
+    nove = vyber(nove)
+    if not nove:
+        print("Zadna sleva nad prahem k oznameni."); return
     if send_mail(nove, souhrn):
         return
     token, repo = os.environ.get("GH_TOKEN"), os.environ.get("GH_REPO")
@@ -269,7 +294,7 @@ def main():
     with open(HIST, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=COLS); w.writeheader(); w.writerows(hist)
     prehled(terms, list(uniq.values()), hist)
-    k_oznameni = [d for d in nove if d["sleva_pct"] == "" or int(d["sleva_pct"]) >= MIN_SLEVA]
+    k_oznameni = vyber(nove)
     if os.path.exists(SOUHRN):  # jednorazova zadost o souhrn vseho, co je prave v akci
         os.remove(SOUHRN)
         if uniq:
