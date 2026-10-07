@@ -8,7 +8,6 @@ on:
     paths:
       - 'watchlist.txt'
       - 'hlidac.py'
-      - 'probe.py'
       - '.github/workflows/hlidac.yml'
 permissions:
   contents: write
@@ -25,7 +24,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install --quiet requests beautifulsoup4
-      - run: python probe.py
+      - run: python hlidac.py
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
