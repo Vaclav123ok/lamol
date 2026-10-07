@@ -1,6 +1,7 @@
 """Hlidac slev: projde watchlist.txt, najde aktualni letakove akce na kupi.cz,
 ulozi je do historie a na nove slevy upozorni pres GitHub issue (prijde e-mailem)."""
 import csv, json, os, re, sys, time, unicodedata
+import html as html_lib
 from datetime import date
 from urllib.parse import quote_plus
 
@@ -154,7 +155,73 @@ def prehled(terms, aktualni, hist):
         f.write("\n".join(L) + "\n")
 
 
+def predmet(nove, souhrn):
+    top = max(nove, key=lambda d: int(d["sleva_pct"] or 0))
+    hlavni = f"{top['produkt']} za {kc(top['cena_kc'])}"
+    if souhrn:
+        return f"Právě v akci ({len(nove)}): {hlavni} a další" if len(nove) > 1 else f"Právě v akci: {hlavni}"
+    return f"Nová sleva: {hlavni}" + (f" + {len(nove) - 1} další" if len(nove) > 1 else "")
+
+
+def platnost_kratce(p):
+    return re.sub(r"^platí\s+", "", p).strip()
+
+
+def mail_html(nove, souhrn):
+    e = html_lib.escape
+    karty = []
+    for d in sorted(nove, key=lambda d: -int(d["sleva_pct"] or 0)):
+        pct = d["sleva_pct"]
+        zasadni = pct != "" and int(pct) >= ZASADNI
+        stitek = (f'<span style="background:{"#c2410c" if zasadni else "#15803d"};color:#fff;border-radius:999px;'
+                  f'padding:2px 9px;font-size:13px;font-weight:600;white-space:nowrap">−{pct} %</span>') if pct != "" else ""
+        bezna = (f' <span style="color:#8a8f98;text-decoration:line-through;font-size:14px">{kc(d["bezna_cena_kc"])}</span>'
+                 if d["bezna_cena_kc"] != "" else "")
+        detail = " · ".join(x for x in (d["obchod"], d["baleni"], platnost_kratce(d["platnost"])) if x)
+        pozn = f'<div style="color:#8a8f98;font-size:13px;margin-top:2px">{e(d["poznamka"])}</div>' if d["poznamka"] else ""
+        karty.append(
+            f'<tr><td style="padding:14px 0;border-bottom:1px solid #eceef1">'
+            f'<a href="{e(d["odkaz"])}" style="color:#111827;text-decoration:none;font-size:16px;font-weight:600">{e(d["produkt"])}</a>'
+            f'<div style="margin-top:6px"><span style="font-size:20px;font-weight:700;color:#111827">{kc(d["cena_kc"])}</span>'
+            f'{bezna} &nbsp;{stitek}</div>'
+            f'<div style="color:#4b5563;font-size:14px;margin-top:4px">{e(detail)}</div>{pozn}</td></tr>')
+    nadpis = "Právě v akci" if souhrn else ("Nová sleva" if len(nove) == 1 else f"{len(nove)} nové slevy" if len(nove) < 5 else f"{len(nove)} nových slev")
+    return (f'<div style="background:#f5f6f8;padding:24px 12px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#fff;'
+            f'border-radius:14px;padding:22px 24px"><tr><td style="font-size:13px;color:#8a8f98;letter-spacing:.04em;text-transform:uppercase">'
+            f'Hlídač slev</td></tr><tr><td style="font-size:22px;font-weight:700;color:#111827;padding:4px 0 6px">{nadpis}</td></tr>'
+            + "".join(karty) +
+            f'<tr><td style="padding-top:14px;color:#8a8f98;font-size:12px">Zdroj: kupi.cz. Cenu a platnost si ověř v letáku.</td></tr>'
+            f'</table></div>')
+
+
+def mail_text(nove):
+    L = []
+    for d in sorted(nove, key=lambda d: -int(d["sleva_pct"] or 0)):
+        pct = f" (−{d['sleva_pct']} %)" if d["sleva_pct"] != "" else ""
+        L.append(f"{d['produkt']}: {kc(d['cena_kc'])}{pct}\n  {d['obchod']} · {d['baleni']} · {platnost_kratce(d['platnost'])}\n  {d['odkaz']}")
+    return "\n\n".join(L) + "\n\nZdroj: kupi.cz. Cenu a platnost si ověř v letáku."
+
+
+def send_mail(nove, souhrn):
+    """Posle hezky e-mail pres Resend. Vraci True pri uspechu."""
+    key, to = os.environ.get("RESEND_API_KEY"), os.environ.get("MAIL_TO")
+    if not key or not to:
+        return False
+    payload = {"from": os.environ.get("MAIL_FROM", "Hlídač slev <hlidac@send.mailora.pro>"), "to": [to],
+               "subject": predmet(nove, souhrn), "html": mail_html(nove, souhrn), "text": mail_text(nove)}
+    r = requests.post("https://api.resend.com/emails", timeout=30, json=payload,
+                      headers={"Authorization": f"Bearer {key}"})
+    if r.status_code >= 300:
+        print("E-mail se nepodarilo odeslat:", r.status_code, r.text[:300])
+        return False
+    print("E-mail odeslan:", payload["subject"])
+    return True
+
+
 def notify(nove, souhrn=False):
+    if send_mail(nove, souhrn):
+        return
     token, repo = os.environ.get("GH_TOKEN"), os.environ.get("GH_REPO")
     nove = sorted(nove, key=lambda d: (d["produkt"], d["cena_kc"]))
     top = min(nove, key=lambda d: d["cena_kc"])
